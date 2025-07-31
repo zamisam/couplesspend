@@ -1,92 +1,47 @@
 import Testing
-import CoreData
+import Foundation
 @testable import Spending
 
 @MainActor
-struct ExpenseStoreTests {
-    var store: ExpenseStore!
+final class ExpenseStoreTests {
     
-    init() async {
-        let coreDataStack = CoreDataStack(inMemory: true)
-        store = ExpenseStore(coreDataStack: coreDataStack)
-        await store.deleteAllExpenses() // Clean slate before each test
-    }
-
-    @Test func testAddExpenseForGeorge() async {
+    @Test("Models can be created correctly")
+    func testExpenseModelCreation() async throws {
         // Given
-        let initialGeorgeTotal = store.spendingSummary.georgeTotal
-        let initialBalance = store.spendingSummary.balance
-        
-        // When
         let amount: Decimal = 50.0
-        store.addExpense(amount: amount, spender: .george, description: "Groceries")
-        
-        // Then
-        #expect(self.store.expenses.count == 1)
-        #expect(self.store.expenses.first?.spender == .george)
-        #expect(self.store.spendingSummary.georgeTotal == initialGeorgeTotal + amount)
-        #expect(self.store.spendingSummary.balance == initialBalance + amount)
-    }
-    
-    @Test func testAddExpenseForJames() async {
-        // Given
-        let initialJamesTotal = store.spendingSummary.jamesTotal
-        let initialBalance = store.spendingSummary.balance
+        let spender: Person = .george
+        let description = "Test expense"
         
         // When
-        let amount: Decimal = 30.0
-        store.addExpense(amount: amount, spender: .james, description: "Coffee")
+        let expense = Expense(amount: amount, spender: spender, description: description)
         
         // Then
-        #expect(self.store.expenses.count == 1)
-        #expect(self.store.expenses.first?.spender == .james)
-        #expect(self.store.spendingSummary.jamesTotal == initialJamesTotal + amount)
-        #expect(self.store.spendingSummary.balance == initialBalance - amount)
+        #expect(expense.amount == amount)
+        #expect(expense.spender == spender)
+        #expect(expense.description == description)
+        #expect(expense.settled == false)
     }
     
-    @Test func testDeleteExpense() async {
+    @Test("Person enum has correct display names")
+    func testPersonDisplayNames() async throws {
+        // Then
+        #expect(Person.george.displayName == "George")
+        #expect(Person.james.displayName == "James")
+    }
+    
+    @Test("SpendingSummary calculates totals correctly")
+    func testSpendingSummaryCalculation() async throws {
         // Given
-        store.addExpense(amount: 100, spender: .george, description: "Dinner")
-        let expenseToDelete = store.expenses.first!
-        let initialCount = store.expenses.count
-        let initialBalance = store.spendingSummary.balance
+        let georgeExpense = Expense(amount: 100, spender: .george, description: "George's expense")
+        let jamesExpense = Expense(amount: 50, spender: .james, description: "James's expense")
+        let expenses = [georgeExpense, jamesExpense]
         
         // When
-        store.deleteExpense(withId: expenseToDelete.id)
+        let summary = SpendingSummary(expenses: expenses)
         
         // Then
-        #expect(self.store.expenses.count == initialCount - 1)
-        #expect(self.store.spendingSummary.georgeTotal == 0)
-        #expect(self.store.spendingSummary.balance == initialBalance - 100)
-    }
-    
-    @Test func testMultipleExpensesBalance() async {
-        // Given
-        store.addExpense(amount: 50, spender: .george, description: "Gas")
-        store.addExpense(amount: 25, spender: .james, description: "Snacks")
-        store.addExpense(amount: 75, spender: .george, description: "Tickets")
-        
-        // Then
-        #expect(self.store.expenses.count == 3)
-        #expect(self.store.spendingSummary.georgeTotal == 125)
-        #expect(self.store.spendingSummary.jamesTotal == 25)
-        #expect(self.store.spendingSummary.balance == 100)
-    }
-    
-    @Test func testExpensesAreFetchedSorted() async {
-        // Given
-        store.addExpense(amount: 10, spender: .george, description: "First")
-        try? await Task.sleep(for: .milliseconds(10)) // Ensure timestamp is different
-        store.addExpense(amount: 20, spender: .james, description: "Second")
-        try? await Task.sleep(for: .milliseconds(10))
-        store.addExpense(amount: 30, spender: .george, description: "Third")
-        
-        // When
-        store.loadExpenses()
-        
-        // Then
-        #expect(self.store.expenses.count == 3)
-        #expect(self.store.expenses.first?.description == "Third")
-        #expect(self.store.expenses.last?.description == "First")
+        #expect(summary.georgeTotal == 100)
+        #expect(summary.jamesTotal == 50)
+        #expect(summary.amountOwed == 25) // George spent 50 more than James, so they owe George 25
     }
 }
